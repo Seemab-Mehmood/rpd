@@ -4,35 +4,17 @@ const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
-const mongoose = require('mongoose');
 
-const Slide = require('./models/Slide');
-const Config = require('./models/Config');
+const { pool, initSchema, isActive, toSlideJson } = require('./db');
 
 const {
   PORT = 3000,
-  MONGODB_URI,
   JWT_SECRET = 'change-me-please',
   ADMIN_USERNAME = 'admin',
   ADMIN_PASSWORD = 'change-me-please',
 } = process.env;
 
-if (!MONGODB_URI) {
-  console.error('Missing MONGODB_URI env var — set it to your MongoDB Atlas connection string.');
-  process.exit(1);
-}
-
-mongoose
-  .connect(MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch((err) => {
-    console.error('MongoDB connection failed:', err.message);
-    process.exit(1);
-  });
-
-// Never let one bad request take the whole process down (this is what was
-// causing the 502s — an uncaught error in an async route handler used to
-// crash the entire server instead of just failing that one request).
+// Never let one bad request take the whole process down.
 process.on('unhandledRejection', (err) => {
   console.error('Unhandled promise rejection:', err);
 });
@@ -74,14 +56,14 @@ function requireAdmin(req, res, next) {
 
 // ---------- public API (used by the display screen) ----------
 app.get('/api/slides', wrap(async (req, res) => {
-  const slides = await Slide.find().sort({ createdAt: -1 });
-  const active = slides.filter((s) => s.isActive());
-  res.json(active.map((s) => ({ image: s.image, tag: s.tag, sub: s.sub })));
+  const { rows } = await pool.query('SELECT * FROM slides ORDER BY created_at DESC');
+  const active = rows.filter(isActive);
+  res.json(active.map((r) => toSlideJson(r)));
 }));
 
 app.get('/api/config', wrap(async (req, res) => {
-  const cfg = (await Config.findOne({ key: 'site' })) || (await Config.create({ key: 'site' }));
-  res.json({ menuUrl: cfg.menuUrl });
+  const { rows } = await pool.query('SELECT menu_url FROM config WHERE key = $1', ['site']);
+  res.json({ menuUrl: rows[0]?.menu_url || '' });
 }));
 
 // ---------- admin auth ----------
@@ -97,24 +79,13 @@ app.post('/api/admin/login', wrap(async (req, res) => {
 
 // ---------- admin: promo slides ----------
 app.get('/api/admin/slides', requireAdmin, wrap(async (req, res) => {
-  const slides = await Slide.find().sort({ createdAt: -1 });
-  res.json(
-    slides.map((s) => ({
-      id: s._id,
-      image: s.image,
-      tag: s.tag,
-      sub: s.sub,
-      hoursActive: s.hoursActive,
-      createdAt: s.createdAt,
-      expiresAt: s.expiresAt(),
-      active: s.isActive(),
-    }))
-  );
+  const { rows } = await pool.query('SELECT * FROM slides ORDER BY created_at DESC');
+  res.json(rows.map((r) => toSlideJson(r, { withAdminFields: true })));
 }));
 
-// MongoDB's hard document-size ceiling is 16MB; we cap well under that so a
-// too-large upload fails with a clear 400 instead of a DB error that used to
-// crash the process.
+// Postgres TEXT columns comfortably hold far more than base64 images need,
+// but we still cap uploads so a huge file fails with a clear 400 instead of
+// a slow write.
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10MB
 
 app.post('/api/admin/slides', requireAdmin, wrap(async (req, res) => {
@@ -126,17 +97,16 @@ app.post('/api/admin/slides', requireAdmin, wrap(async (req, res) => {
   if (Buffer.byteLength(image, 'utf8') > MAX_IMAGE_BYTES) {
     return res.status(400).json({ error: 'Image is too large — try a smaller photo' });
   }
-  const slide = await Slide.create({
-    image,
-    tag: tag || 'Special Offer!',
-    sub: sub || '',
-    hoursActive: Number(hoursActive) || 0,
-  });
-  res.status(201).json({ id: slide._id });
+  const { rows } = await pool.query(
+    `INSERT INTO slides (image, tag, sub, hours_active)
+     VALUES ($1, $2, $3, $4) RETURNING id`,
+    [image, tag || 'Special Offer!', sub || '', Number(hoursActive) || 0]
+  );
+  res.status(201).json({ id: rows[0].id });
 }));
 
 app.delete('/api/admin/slides/:id', requireAdmin, wrap(async (req, res) => {
-  await Slide.findByIdAndDelete(req.params.id);
+  await pool.query('DELETE FROM slides WHERE id = $1', [req.params.id]);
   res.json({ ok: true });
 }));
 
@@ -144,12 +114,13 @@ app.delete('/api/admin/slides/:id', requireAdmin, wrap(async (req, res) => {
 app.put('/api/admin/config', requireAdmin, wrap(async (req, res) => {
   const { menuUrl } = req.body || {};
   if (!menuUrl) return res.status(400).json({ error: 'menuUrl is required' });
-  const cfg = await Config.findOneAndUpdate(
-    { key: 'site' },
-    { menuUrl },
-    { upsert: true, new: true }
+  const { rows } = await pool.query(
+    `INSERT INTO config (key, menu_url) VALUES ('site', $1)
+     ON CONFLICT (key) DO UPDATE SET menu_url = EXCLUDED.menu_url
+     RETURNING menu_url`,
+    [menuUrl]
   );
-  res.json({ menuUrl: cfg.menuUrl });
+  res.json({ menuUrl: rows[0].menu_url });
 }));
 
 // ---------- static pages ----------
@@ -157,7 +128,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// ---------- error handling (always returns JSON, never Express's HTML page) ----------
+// ---------- error handling (always returns JSON, never an HTML error page) ----------
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
@@ -169,5 +140,16 @@ app.use((err, req, res, next) => {
   }
   res.status(err.status || 500).json({ error: err.message || 'Something went wrong' });
 });
+
+initSchema()
+  .then(() => {
+    console.log('Connected to Neon and verified schema');
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  })
+  .catch((err) => {
+    console.error('Database setup failed:', err.message);
+    process.exit(1);
+  });
+
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
