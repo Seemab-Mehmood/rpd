@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/jpeg" href="/logo.jpg">
+<title>Screen Remote — Al-Rizwan Paratha Experts</title>
+<style>
+  :root{
+    --gold:#F7B500; --maroon:#9C1B1B; --brown-deep:#241205; --cream:#FFF4DC;
+    --ink-dim:#7a6a52; --line:#e7ddc9; --danger:#b02a2a;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background:#fbf7ee; color:#241205; }
+  header{ background: linear-gradient(180deg, var(--brown-deep), #150b03); color:var(--cream);
+    padding:18px 20px; text-align:center; }
+  header h1{ margin:0; font-size:20px; font-style:italic; }
+  header h1 span{ color: var(--gold); }
+  header p{ margin:4px 0 0; font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:#cbb98a; }
+
+  main{ max-width:760px; margin:0 auto; padding:20px; }
+  .card{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:18px; margin-bottom:18px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.04); }
+  .card h2{ margin:0 0 12px; font-size:16px; }
+  label{ display:block; font-size:12px; font-weight:600; margin:10px 0 4px; color:#4a3a22; }
+  input[type=text], input[type=password], input[type=number], input[type=url]{
+    width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; }
+  input[type=file]{ margin-top:4px; }
+  button{ cursor:pointer; border:none; border-radius:8px; padding:10px 16px; font-size:14px; font-weight:600; }
+  .btn-primary{ background: var(--maroon); color:#fff; }
+  .btn-primary:hover{ background:#7c1414; }
+  .btn-ghost{ background:#f1ece0; color:#4a3a22; }
+  .btn-danger{ background:transparent; color:var(--danger); border:1px solid var(--danger); padding:6px 10px; font-size:12px; }
+  .btn-danger:hover{ background:var(--danger); color:#fff; }
+  .row{ display:flex; gap:10px; }
+  .row > *{ flex:1; }
+  #loginError, #formMsg, #configMsg{ color:var(--danger); font-size:13px; margin-top:8px; min-height:16px; }
+  .ok{ color:#2a7a2a !important; }
+
+  #slideList{ display:flex; flex-direction:column; gap:10px; margin-top:14px; }
+  .slideRow{ display:flex; gap:12px; align-items:center; border:1px solid var(--line); border-radius:10px; padding:8px; }
+  .slideRow img{ width:70px; height:70px; object-fit:cover; border-radius:8px; flex-shrink:0; }
+  .slideRow .meta{ flex:1; min-width:0; }
+  .slideRow .meta .tag{ font-weight:700; font-size:14px; }
+  .slideRow .meta .sub{ font-size:12px; color:var(--ink-dim); }
+  .badge{ display:inline-block; font-size:10px; padding:2px 8px; border-radius:10px; margin-top:4px; }
+  .badge.active{ background:#e4f5e4; color:#2a7a2a; }
+  .badge.expired{ background:#f5e4e4; color:var(--danger); }
+
+  #logoutBtn{ position:absolute; top:14px; right:16px; }
+  .topbar{ position:relative; }
+  .hidden{ display:none !important; }
+  .hint{ font-size:11px; color:var(--ink-dim); margin-top:4px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <header>
+    <h1>Al-Rizwan Paratha <span>Screen Remote</span></h1>
+    <p>Control what plays on the display &amp; where the QR code points</p>
+  </header>
+  <button id="logoutBtn" class="btn-ghost hidden">Log out</button>
+</div>
+
+<main>
+  <!-- LOGIN -->
+  <div class="card" id="loginCard">
+    <h2>Admin Login</h2>
+    <label for="username">Username</label>
+    <input type="text" id="username" autocomplete="username">
+    <label for="password">Password</label>
+    <input type="password" id="password" autocomplete="current-password">
+    <div style="margin-top:14px;">
+      <button class="btn-primary" id="loginBtn">Log in</button>
+    </div>
+    <div id="loginError"></div>
+  </div>
+
+  <!-- APP (hidden until logged in) -->
+  <div id="app" class="hidden">
+
+    <div class="card">
+      <h2>Menu link behind the QR code</h2>
+      <label for="menuUrl">Menu URL</label>
+      <input type="url" id="menuUrl" placeholder="https://www.rizwan-paratha.world">
+      <div style="margin-top:12px;">
+        <button class="btn-primary" id="saveConfigBtn">Save link</button>
+      </div>
+      <div id="configMsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Add a promo slide</h2>
+      <label for="slideImage">Image</label>
+      <input type="file" id="slideImage" accept="image/*">
+      <div class="hint">Photos are resized in your browser before upload, so any size photo is fine.</div>
+      <label for="slideTag">Headline (shown big on screen)</label>
+      <input type="text" id="slideTag" placeholder="New Item! Chicken Malai Boti Wrap">
+      <label for="slideSub">Subtext (optional)</label>
+      <input type="text" id="slideSub" placeholder="Available for a limited time — ask in store">
+      <label for="slideHours">Keep this live for (hours) — leave blank to run until you delete it</label>
+      <input type="number" id="slideHours" min="1" placeholder="e.g. 48">
+      <label for="slideSeconds">Display duration (seconds) — leave blank for the 3-second default</label>
+      <input type="number" id="slideSeconds" min="1" placeholder="e.g. 6">
+      <div style="margin-top:14px;">
+        <button class="btn-primary" id="addSlideBtn">Add to rotation</button>
+      </div>
+      <div id="formMsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Slides currently in rotation</h2>
+      <div id="slideList"></div>
+    </div>
+
+    <div class="card">
+      <h2>Wheel game prizes</h2>
+      <div class="hint">These are the segments customers can land on when they play the gesture-controlled spin wheel. Add at least 6–8 for a good-looking wheel.</div>
+      <label for="wheelImage">Prize image</label>
+      <input type="file" id="wheelImage" accept="image/*">
+      <label for="wheelLabel">Prize label (shown on the wedge)</label>
+      <input type="text" id="wheelLabel" placeholder="Free Chai">
+      <div style="margin-top:14px;">
+        <button class="btn-primary" id="addWheelBtn">Add prize</button>
+      </div>
+      <div id="wheelFormMsg"></div>
+      <div id="wheelList" style="margin-top:14px;"></div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+const API = '';
+let token = localStorage.getItem('rp_admin_token') || '';
+
+const loginCard = document.getElementById('loginCard');
+const app = document.getElementById('app');
+const logoutBtn = document.getElementById('logoutBtn');
+
+function authHeaders(){
+  return { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' };
+}
+
+function showLoggedIn(){
+  loginCard.classList.add('hidden');
+  app.classList.remove('hidden');
+  logoutBtn.classList.remove('hidden');
+  loadConfig();
+  loadSlides();
+  loadWheel();
+}
+function showLoggedOut(){
+  loginCard.classList.remove('hidden');
+  app.classList.add('hidden');
+  logoutBtn.classList.add('hidden');
+}
+
+if (token) showLoggedIn(); else showLoggedOut();
+
+document.getElementById('loginBtn').addEventListener('click', async () => {
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  const errBox = document.getElementById('loginError');
+  errBox.textContent = '';
+  try{
+    const res = await fetch(API + '/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'Login failed');
+    token = data.token;
+    localStorage.setItem('rp_admin_token', token);
+    showLoggedIn();
+  } catch(e){
+    errBox.textContent = e.message;
+  }
+});
+
+logoutBtn.addEventListener('click', () => {
+  localStorage.removeItem('rp_admin_token');
+  token = '';
+  showLoggedOut();
+});
+
+async function loadConfig(){
+  const res = await fetch(API + '/api/config');
+  const cfg = await res.json();
+  document.getElementById('menuUrl').value = cfg.menuUrl || '';
+}
+
+document.getElementById('saveConfigBtn').addEventListener('click', async () => {
+  const menuUrl = document.getElementById('menuUrl').value.trim();
+  const msg = document.getElementById('configMsg');
+  msg.textContent = '';
+  msg.classList.remove('ok');
+  try{
+    const res = await fetch(API + '/api/admin/config', {
+      method: 'PUT', headers: authHeaders(), body: JSON.stringify({ menuUrl }),
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'Could not save');
+    msg.textContent = 'Saved — the screen\'s QR code will update within a minute.';
+    msg.classList.add('ok');
+  } catch(e){
+    if (res_unauthorized(e)) return;
+    msg.textContent = e.message;
+  }
+});
+
+function res_unauthorized(e){
+  if (e.message && e.message.toLowerCase().includes('token')) { showLoggedOut(); return true; }
+  return false;
+}
+
+// ---- resize an uploaded image client-side before turning it into base64 ----
+function resizeImage(file, maxDim = 1600, quality = 0.82){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = (e) => { img.src = e.target.result; };
+    reader.onerror = reject;
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > height && width > maxDim) { height = Math.round(height * maxDim / width); width = maxDim; }
+      else if (height > maxDim) { width = Math.round(width * maxDim / height); height = maxDim; }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById('addSlideBtn').addEventListener('click', async () => {
+  const fileInput = document.getElementById('slideImage');
+  const tag = document.getElementById('slideTag').value.trim();
+  const sub = document.getElementById('slideSub').value.trim();
+  const hoursActive = document.getElementById('slideHours').value;
+  const displaySeconds = document.getElementById('slideSeconds').value;
+  const msg = document.getElementById('formMsg');
+  msg.textContent = ''; msg.classList.remove('ok');
+
+  if(!fileInput.files[0]){ msg.textContent = 'Choose an image first.'; return; }
+
+  try{
+    const image = await resizeImage(fileInput.files[0]);
+    const res = await fetch(API + '/api/admin/slides', {
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({ image, tag, sub, hoursActive, displaySeconds }),
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'Could not add slide');
+    msg.textContent = 'Added! It will appear on the screen within a minute.';
+    msg.classList.add('ok');
+    fileInput.value = '';
+    document.getElementById('slideTag').value = '';
+    document.getElementById('slideSub').value = '';
+    document.getElementById('slideHours').value = '';
+    document.getElementById('slideSeconds').value = '';
+    loadSlides();
+  } catch(e){
+    if (res_unauthorized(e)) return;
+    msg.textContent = e.message;
+  }
+});
+
+async function loadSlides(){
+  const list = document.getElementById('slideList');
+  list.innerHTML = 'Loading…';
+  try{
+    const res = await fetch(API + '/api/admin/slides', { headers: authHeaders() });
+    if(res.status === 401){ showLoggedOut(); return; }
+    const slides = await res.json();
+    if(!slides.length){ list.innerHTML = '<div class="hint">No slides yet — add one above.</div>'; return; }
+    list.innerHTML = '';
+    slides.forEach((s) => {
+      const row = document.createElement('div');
+      row.className = 'slideRow';
+      const expiry = s.expiresAt ? new Date(s.expiresAt).toLocaleString() : 'No expiry';
+      row.innerHTML = `
+        <img src="${s.image}" alt="">
+        <div class="meta">
+          <div class="tag">${s.tag}</div>
+          <div class="sub">${s.sub || ''}</div>
+          <span class="badge ${s.active ? 'active' : 'expired'}">${s.active ? 'Live now' : 'Expired'} · ${expiry}</span>
+          <span class="badge" style="background:#f1ece0;color:#4a3a22;">${s.displaySeconds ? s.displaySeconds + 's' : '3s (default)'}</span>
+        </div>
+        <button class="btn-danger" data-id="${s.id}">Remove</button>
+      `;
+      row.querySelector('button').addEventListener('click', () => deleteSlide(s.id));
+      list.appendChild(row);
+    });
+  } catch(e){
+    list.innerHTML = '<div class="hint">Could not load slides.</div>';
+  }
+}
+
+async function deleteSlide(id){
+  if(!confirm('Remove this slide from the screen?')) return;
+  await fetch(API + '/api/admin/slides/' + id, { method: 'DELETE', headers: authHeaders() });
+  loadSlides();
+}
+
+// ---- wheel game prizes ----
+document.getElementById('addWheelBtn').addEventListener('click', async () => {
+  const fileInput = document.getElementById('wheelImage');
+  const label = document.getElementById('wheelLabel').value.trim();
+  const msg = document.getElementById('wheelFormMsg');
+  msg.textContent = ''; msg.classList.remove('ok');
+
+  if(!fileInput.files[0]){ msg.textContent = 'Choose an image first.'; return; }
+  if(!label){ msg.textContent = 'Give the prize a label.'; return; }
+
+  try{
+    const image = await resizeImage(fileInput.files[0]);
+    const res = await fetch(API + '/api/admin/wheel', {
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({ image, label }),
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'Could not add prize');
+    msg.textContent = 'Added! It will appear on the wheel within a minute.';
+    msg.classList.add('ok');
+    fileInput.value = '';
+    document.getElementById('wheelLabel').value = '';
+    loadWheel();
+  } catch(e){
+    if (res_unauthorized(e)) return;
+    msg.textContent = e.message;
+  }
+});
+
+async function loadWheel(){
+  const list = document.getElementById('wheelList');
+  list.innerHTML = 'Loading…';
+  try{
+    const res = await fetch(API + '/api/admin/wheel', { headers: authHeaders() });
+    if(res.status === 401){ showLoggedOut(); return; }
+    const segments = await res.json();
+    if(!segments.length){ list.innerHTML = '<div class="hint">No prizes yet — add at least a few above so the wheel has something to show.</div>'; return; }
+    list.innerHTML = '';
+    segments.forEach((s) => {
+      const row = document.createElement('div');
+      row.className = 'slideRow';
+      row.innerHTML = `
+        <img src="${s.image}" alt="">
+        <div class="meta">
+          <div class="tag">${s.label}</div>
+        </div>
+        <button class="btn-danger" data-id="${s.id}">Remove</button>
+      `;
+      row.querySelector('button').addEventListener('click', () => deleteWheelSegment(s.id));
+      list.appendChild(row);
+    });
+  } catch(e){
+    list.innerHTML = '<div class="hint">Could not load wheel prizes.</div>';
+  }
+}
+
+async function deleteWheelSegment(id){
+  if(!confirm('Remove this prize from the wheel?')) return;
+  await fetch(API + '/api/admin/wheel/' + id, { method: 'DELETE', headers: authHeaders() });
+  loadWheel();
+}
+</script>
+</body>
+</html>
